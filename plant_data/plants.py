@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Text, Integer, select, String, Numeric, Boolean
-from sqlalchemy.orm import Session, Mapped, mapped_column, DeclarativeBase
+from sqlalchemy import Text, Integer, select, String, Numeric, Boolean
+from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 load_dotenv()
 database_url = os.getenv("DATABASE_URL")
-engine = create_engine(database_url)
+engine = create_async_engine(database_url, echo=False)
 
 class Base(DeclarativeBase):
     pass
@@ -25,6 +26,7 @@ class Plant(Base):
     soil_pref: Mapped[str] = mapped_column(String(150), nullable=True)
     soil_ph: Mapped[str] = mapped_column(String(100), nullable=True)
     warnings: Mapped[str] = mapped_column(Text, nullable=True)
+    image: Mapped[str] = mapped_column(Text, nullable=True)
 
     popularity: Mapped[int] = mapped_column(Integer, nullable=True)
     height_min: Mapped[float] = mapped_column(Numeric, nullable=True)
@@ -47,22 +49,12 @@ class Plant(Base):
     benefits_birds: Mapped[bool] = mapped_column(Boolean, nullable=True)
     deer_resistant: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
-    def to_dict(self):
-        plant_data = {}
-
-        for column in self.__table__.columns:
-            column_name = column.name
-            value = getattr(self, column_name)
-            plant_data[column_name] = value
-        return plant_data
-        
-
     @classmethod
-    def get_all_plants(cls, engine):
+    async def get_all_plants(cls, engine) -> list:
         try:
-            with Session(engine) as session:
-                query = select(cls.plant_id, cls.display_name, cls.scientific_name, cls.popularity, cls.form, cls.price_rating).limit(10)
-                results = session.execute(query)
+            async with AsyncSession(engine) as session:
+                query = select(cls.plant_id, cls.display_name, cls.scientific_name, cls.popularity, cls.form, cls.price_rating, cls.image)
+                results = await session.execute(query)
                 plant_list = []
                 for row in results:
                     plant_list.append({
@@ -71,7 +63,8 @@ class Plant(Base):
                         "scientific_name": row.scientific_name,
                         "popularity": row.popularity,
                         "form": row.form,
-                        "price_rating": row.price_rating
+                        "price_rating": row.price_rating,
+                        "image": row.image
                     })
                 return plant_list
         except Exception as e:
@@ -82,5 +75,3 @@ class Plant(Base):
     def get_plant_by_id(cls, engine, target_id: int):
         pass
 
-test = Plant.get_all_plants(engine)
-print(test)
