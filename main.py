@@ -1,8 +1,13 @@
 from fastapi import FastAPI, APIRouter
 from plant_data import plants as plant_query
 from auth import service
+from pydantic import BaseModel
 
 app = FastAPI()
+
+class UserCredentials(BaseModel):
+    username: str
+    password: str
 
 plants_router = APIRouter(
     prefix="/plants",
@@ -14,9 +19,15 @@ async def preview_plants() -> list:
     preview = await plant_query.Plant.get_all_plants(plant_query.engine)
     return preview
 
-@plants_router.get("/get_by_plant_id")
-def get_specific_plant(id: int) -> list:
-    pass
+@plants_router.get("/search")
+async def search_plants(q: str) -> list:
+    return await plant_query.Plant.search_plant(plant_query.engine, q)
+
+@plants_router.get("/{plant_id}")
+async def get_specific_plant(plant_id: int) -> list:
+    return await plant_query.Plant.get_plant_by_id(plant_query.engine, plant_id)
+
+
 
 auth_router = APIRouter(
     prefix="/auth",
@@ -24,11 +35,11 @@ auth_router = APIRouter(
 )
 
 @auth_router.post("/login")
-async def user_login(username: str, password: str) -> bool:
+async def user_login(user: UserCredentials) -> bool:
     pass
 
 @auth_router.post("/register")
-async def register_user(username: str, password: str) -> bool:
+async def register_user(user: UserCredentials) -> bool:
     pass
 
 app.include_router(plants_router)

@@ -3,7 +3,6 @@ import os
 from dotenv import load_dotenv
 from argon2 import PasswordHasher
 
-
 load_dotenv()
 
 ph = PasswordHasher()
