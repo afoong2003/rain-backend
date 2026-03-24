@@ -1,7 +1,7 @@
 import os
 from typing import ClassVar
 from dotenv import load_dotenv
-from sqlalchemy import Text, Integer, select, String, Numeric, Boolean, or_
+from sqlalchemy import text, Text, Integer, select, String, Numeric, Boolean, or_
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
@@ -49,6 +49,9 @@ class Plant(Base):
     benefits_hummingbirds: Mapped[bool] = mapped_column(Boolean, nullable=True)
     benefits_birds: Mapped[bool] = mapped_column(Boolean, nullable=True)
     deer_resistant: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    pos_base: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    pos_slope: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    pos_margin: Mapped[bool] = mapped_column(Boolean, nullable=True)
     
     color_red: Mapped[bool] = mapped_column(Boolean, nullable=True)
     color_orange: Mapped[bool] = mapped_column(Boolean, nullable=True)
@@ -82,7 +85,10 @@ class Plant(Base):
             "color_purple": "Purple",
             "color_pink": "Pink",
             "color_brown": "Brown",
-            "color_white": "White"
+            "color_white": "White",
+            "pos_base": "Base",
+            "pos_slope": "Slope",
+            "pos_margin": "Margin",
         }
 
     @classmethod
@@ -90,27 +96,20 @@ class Plant(Base):
         try:
             async with AsyncSession(engine) as session:
                 query = select(cls.plant_id, cls.display_name, cls.scientific_name, 
-                               cls.popularity_rating, cls.form, cls.price_rating, 
-                               cls.description, cls.image, cls.sun_full, 
-                               cls.benefits_birds, cls.benefits_butterflies, cls.benefits_pollinators, 
-                               cls.benefits_hummingbirds, cls.drought_tolerant, cls.flood_tolerant, 
-                               cls.road_salt_tolerant, cls.sun_partial, cls.sun_shade,
-                               cls.moisture_dry, cls.moisture_med, cls.moisture_wet, 
-                               cls.deer_resistant
+                               cls.popularity_rating, cls.price_rating, cls.image,
+                               cls.sun_full, cls.sun_shade, cls.sun_partial,
+                               cls.pos_base, cls.pos_margin, cls.pos_slope
                                )
-                
                 results = await session.execute(query)
                 plant_list = []
+
                 for row in results:
                     plant_tags = []
-
-                    if (row.form):
-                        plant_tags.append(row.form)
-                    
+                 
                     for col_name, tag_name in cls.tag_map.items():
                         if row._mapping.get(col_name) is True:
                             plant_tags.append(tag_name)
-
+                    
                     plant_list.append(
                         {
                         "plant_id": row.plant_id,
@@ -118,12 +117,10 @@ class Plant(Base):
                         "scientific_name": row.scientific_name,
                         "popularity_rating": row.popularity_rating,
                         "price_rating": row.price_rating,
-                        "description": row.description,
                         "image": row.image,
                         "tags": plant_tags
                         }
                     )
-                    
                 return plant_list
             
         except Exception as e:
@@ -187,15 +184,8 @@ class Plant(Base):
                 starts_with = f"{normalized_query}%"
                 search_query = (
                     select(
-                        cls.plant_id, cls.display_name, cls.scientific_name,
-                        cls.popularity_rating, cls.form, cls.price_rating,
-                        cls.description, cls.image, cls.sun_full,
-                        cls.benefits_birds, cls.benefits_butterflies,
-                        cls.benefits_pollinators, cls.benefits_hummingbirds,
-                        cls.drought_tolerant, cls.flood_tolerant,
-                        cls.road_salt_tolerant, cls.sun_partial,
-                        cls.sun_shade, cls.moisture_dry, cls.moisture_med,
-                        cls.moisture_wet, cls.deer_resistant
+                        cls.plant_id, cls.display_name, 
+                        cls.scientific_name, cls.image, 
                     )
                     .where(
                         or_(
@@ -204,38 +194,92 @@ class Plant(Base):
                         )
                     )
                 )
-
-
                 results = await session.execute(search_query)
                 plant_list = []
 
                 for row in results:
+                    plant_list.append(
+                        {
+                            "plant_id": row.plant_id,
+                            "display_name": row.display_name,
+                            "scientific_name": row.scientific_name,
+                            "image": row.image,
+                        }
+                    )
+                return plant_list
+
+        except Exception as e:
+            print(f"err: {e}")
+            return []
+
+    @classmethod
+    async def plant_filter(
+        cls, engine, 
+        sun_shade: bool | None = None,
+        sun_full: bool | None = None,
+        sun_partial: bool | None = None,
+        moisture_wet: bool | None = None,
+        moisture_dry: bool | None = None,
+        moisture_med: bool | None = None,
+        pos_base: bool | None = None,
+        pos_slope: bool | None = None,
+        pos_margin: bool | None = None
+        ) -> list:
+        try:
+            async with AsyncSession(engine) as session:
+                filters = []
+
+                check = {
+                    "sun_full": sun_full,
+                    "sun_shade": sun_shade,
+                    "sun_partial": sun_partial,
+                    "moisture_wet": moisture_wet,
+                    "moisture_dry": moisture_dry,
+                    "moisture_med": moisture_med,
+                    "pos_base": pos_base, 
+                    "pos_slope": pos_slope,
+                    "pos_margin": pos_margin
+                }
+
+                for name, value in check.items():
+                    if value is True:
+                        filters.append(getattr(cls, name).is_(True))
+
+                search_query = select(
+                        cls.plant_id, cls.display_name, cls.scientific_name, 
+                        cls.image, cls.pos_base, cls.pos_margin,
+                        cls.pos_slope, cls.sun_full, cls.sun_partial,
+                        cls.sun_shade
+                    )
+                
+                if filters: 
+                    search_query = search_query.where(*filters)
+                   
+                results = await session.execute(search_query)
+                plant_list = []
+
+                for row in results:
+                    """"
                     plant_tags = []
-
-                    if row.form:
-                        plant_tags.append(row.form)
-
+                 
                     for col_name, tag_name in cls.tag_map.items():
                         if row._mapping.get(col_name) is True:
                             plant_tags.append(tag_name)
+                            """
 
                     plant_list.append(
                         {
                             "plant_id": row.plant_id,
                             "display_name": row.display_name,
                             "scientific_name": row.scientific_name,
-                            "popularity_rating": row.popularity_rating,
-                            "price_rating": row.price_rating,
-                            "description": row.description,
-                            "image": row.image,
-                            "tags": plant_tags,
+                            "image": row.image,    
+                            #"tags": plant_tags                   
                         }
                     )
-
-
                 return plant_list
 
+        
         except Exception as e:
-            print(f"err: {e}")
+            print(f"error: {e}")
             return []
 
