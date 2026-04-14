@@ -19,7 +19,9 @@ class PlantFilter(BaseModel):
     pos_base: bool | None = None
     pos_slope: bool | None = None
     pos_margin: bool | None = None
-    
+
+
+
 
 plants_router = APIRouter(
     prefix="/plants",
@@ -51,7 +53,7 @@ async def get_filtered_plant(filters: PlantFilter) -> list:
         )
 
 @plants_router.get("/{plant_id}")
-async def get_specific_plant(plant_id: int) -> list:
+async def get_specific_plant(plant_id: int) -> dict:
     return await plant_query.Plant.get_plant_by_id(plant_query.engine, plant_id)
 
 

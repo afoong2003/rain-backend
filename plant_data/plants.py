@@ -95,30 +95,29 @@ class Plant(Base):
     async def get_all_plants(cls, engine) -> list:
         try:
             async with AsyncSession(engine) as session:
-                query = select(cls.plant_id, cls.display_name, cls.scientific_name, 
-                               cls.popularity_rating, cls.price_rating, cls.image,
-                               cls.sun_full, cls.sun_shade, cls.sun_partial,
-                               cls.pos_base, cls.pos_margin, cls.pos_slope
+                query = select(cls.plant_id, cls.display_name, 
+                               cls.scientific_name, 
+                                cls.image,
                                )
                 results = await session.execute(query)
                 plant_list = []
 
                 for row in results:
+                    """
                     plant_tags = []
                  
                     for col_name, tag_name in cls.tag_map.items():
                         if row._mapping.get(col_name) is True:
                             plant_tags.append(tag_name)
+                            """
                     
                     plant_list.append(
                         {
                         "plant_id": row.plant_id,
                         "display_name": row.display_name,
                         "scientific_name": row.scientific_name,
-                        "popularity_rating": row.popularity_rating,
-                        "price_rating": row.price_rating,
                         "image": row.image,
-                        "tags": plant_tags
+                        #"tags": plant_tags
                         }
                     )
                 return plant_list
@@ -128,50 +127,53 @@ class Plant(Base):
             return []
             
     @classmethod
-    async def get_plant_by_id(cls, engine, target_id: int) -> list:
+    async def get_plant_by_id(cls, engine, target_id: int) -> dict:
         try:
             async with AsyncSession(engine) as session:
                 search_query = (
                     select(
                         cls.display_name, cls.scientific_name, cls.price_rating,
-                        cls.description, cls.moisture_dry, cls.moisture_med,
-                        cls.moisture_wet, cls.bloom_end, cls.bloom_start, 
-                        cls.height_min, cls.height_max, cls.sun_full, cls.sun_partial,
-                        cls.sun_shade, cls.image
+                        cls.description, cls.bloom_end, cls.bloom_start,
+                        cls.height_min, cls.height_max, cls.image, cls.form,
+                        cls.popularity_rating, cls.space_min, cls.space_max,
+                        *[getattr(cls, col_name) for col_name in cls.tag_map]
                         )
                         .where(
                             cls.plant_id == target_id
                         )
                 )
                 result = await session.execute(search_query)
-                plant = []
+                row = result.first()
 
-                for row in result:
-                    plant_tags = []
-                 
-                    for col_name, tag_name in cls.tag_map.items():
-                        if row._mapping.get(col_name) is True:
-                            plant_tags.append(tag_name)
-                        
-                    plant.append(
-                        {
-                            "display_name": row.display_name,
-                            "scientific_name": row.scientific_name,
-                            "price_rating": row.price_rating,
-                            "description": row.description,
-                            "bloom_start": row.bloom_start,
-                            "bloom_end": row.bloom_end,
-                            "height_min": row.height_min,
-                            "height_max": row.height_max,
-                            "image": row.image,
-                            "tags": plant_tags
-                        }
-                    )
+                if row is None:
+                    return {}
+                
+
+                plant = {
+                    "display_name": row.display_name,
+                    "scientific_name": row.scientific_name,
+                    "price_rating": row.price_rating,
+                    "description": row.description,
+                    "bloom_end": row.bloom_end,
+                    "bloom_start": row.bloom_start,
+                    "height_min": row.height_min,
+                    "height_max": row.height_max,
+                    "image": row.image,
+                    "popularity_rating": row.popularity_rating,
+                    "form": row.form,
+                    "space_min": row.space_min,
+                    "space_max": row.space_max
+                }
+
+                for col_name, tag_name in cls.tag_map.items():
+                    if row._mapping.get(col_name) is True:
+                        plant[col_name] = tag_name
+
                 return plant
 
         except Exception as e:
-            print(e)
-            return []
+            print(f"error: {e}")
+            return {}
 
     @classmethod
     async def search_plant(cls, engine, query: str) -> list:
@@ -247,9 +249,7 @@ class Plant(Base):
 
                 search_query = select(
                         cls.plant_id, cls.display_name, cls.scientific_name, 
-                        cls.image, cls.pos_base, cls.pos_margin,
-                        cls.pos_slope, cls.sun_full, cls.sun_partial,
-                        cls.sun_shade
+                        cls.image, cls.space_min, cls.space_max
                     )
                 
                 if filters: 
@@ -272,7 +272,9 @@ class Plant(Base):
                             "plant_id": row.plant_id,
                             "display_name": row.display_name,
                             "scientific_name": row.scientific_name,
-                            "image": row.image,    
+                            "image": row.image,  
+                            "space_min": row.space_min,
+                            "space_max": row.space_max  
                             #"tags": plant_tags                   
                         }
                     )
