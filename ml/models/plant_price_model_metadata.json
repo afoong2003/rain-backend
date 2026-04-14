@@ -1,0 +1,53 @@
+{
+  "model_name": "Random Forest",
+  "training_date": "2026-03-26T15:53:59.057426",
+  "target_column": "price_rating",
+  "r2_score": 0.36463299281119943,
+  "mae": 0.561,
+  "numeric_features": [
+    "bloom_start",
+    "bloom_end",
+    "height_min",
+    "height_max",
+    "space_min",
+    "space_max",
+    "bloom_len",
+    "height_avg",
+    "tolerance_score",
+    "wildlife_score",
+    "space_avg"
+  ],
+  "boolean_features": [
+    "color_red",
+    "color_orange",
+    "color_yellow",
+    "color_green",
+    "color_blue",
+    "color_purple",
+    "color_pink",
+    "color_brown",
+    "color_white",
+    "flood_tolerant",
+    "drought_tolerant",
+    "road_salt_tolerant",
+    "sun_full",
+    "sun_partial",
+    "sun_shade",
+    "moisture_wet",
+    "moisture_med",
+    "moisture_dry",
+    "benefits_pollinators",
+    "benefits_butterflies",
+    "benefits_hummingbirds",
+    "benefits_birds",
+    "deer_resistant",
+    "pos_base",
+    "pos_slope",
+    "pos_margin"
+  ],
+  "categorical_features": [
+    "form",
+    "soil_pref",
+    "soil_ph"
+  ]
+}

@@ -1,13 +1,9 @@
 from fastapi import FastAPI, APIRouter
 from plant_data import plants as plant_query
-from auth import service
+from plant_data.router import router as predict_router, recommendations_router
 from pydantic import BaseModel
 
 app = FastAPI()
-
-class UserCredentials(BaseModel):
-    username: str
-    password: str
 
 class PlantFilter(BaseModel):
     sun_full: bool | None = None
@@ -54,19 +50,6 @@ async def get_filtered_plant(filters: PlantFilter) -> list:
 async def get_specific_plant(plant_id: int) -> list:
     return await plant_query.Plant.get_plant_by_id(plant_query.engine, plant_id)
 
-
-auth_router = APIRouter(
-    prefix="/auth",
-    tags=["Auth"]
-)
-
-@auth_router.post("/login")
-async def user_login(user: UserCredentials) -> bool:
-    pass
-
-@auth_router.post("/register")
-async def register_user(user: UserCredentials) -> bool:
-    pass
-
 app.include_router(plants_router)
-app.include_router(auth_router)
+app.include_router(predict_router)
+app.include_router(recommendations_router)

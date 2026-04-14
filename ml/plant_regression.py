@@ -4,13 +4,9 @@ import logging
 import os
 import sys
 from datetime import datetime
-from getpass import getpass
 
 import joblib
 import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
-from sqlalchemy.exc import OperationalError
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -29,7 +25,12 @@ logging.basicConfig(
 
 
 TARGET_COLUMN = "price_rating"
-DEFAULT_CSV_PATH = os.getenv("PLANTS_CSV_PATH", r"c:\Users\Bzhu\Downloads\plants.csv")
+DEFAULT_CSV_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "plant_data",
+    "plants.csv",
+)
 POSTGRES_SCHEMA = "rg"
 POSTGRES_TABLE = "plant_features"
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
@@ -91,9 +92,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--source",
-        choices=["csv", "postgres"],
+        choices=["csv"],
         default="csv",
-        help="Data source to use. CSV is the default because it is easiest to demo.",
+        help="Data source to use. CSV is the only supported source.",
     )
     parser.add_argument(
         "--csv-path",
@@ -101,31 +102,6 @@ def parse_args() -> argparse.Namespace:
         help=f"Path to the CSV file when using --source csv. Default: {DEFAULT_CSV_PATH}",
     )
     return parser.parse_args()
-
-
-def get_connection_settings() -> dict[str, str]:
-    user = os.getenv("PGUSER", "postgres")
-    password = os.getenv("PGPASSWORD")
-    host = os.getenv("PGHOST", "localhost")
-    port = os.getenv("PGPORT", "5434")
-    database = os.getenv("PGDATABASE", "postgres")
-    visible_password_prompt = os.getenv("PGPASSWORD_VISIBLE", "").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-
-    if not password:
-        prompt = f"Postgres password for user '{user}': "
-        password = input(prompt) if visible_password_prompt else getpass(prompt)
-
-    return {
-        "user": user,
-        "password": password,
-        "host": host,
-        "port": port,
-        "database": database,
-    }
 
 
 def load_csv_dataframe(csv_path: str) -> pd.DataFrame:
@@ -136,40 +112,14 @@ def load_csv_dataframe(csv_path: str) -> pd.DataFrame:
 
 
 def load_postgres_dataframe() -> pd.DataFrame:
-    settings = get_connection_settings()
-    conn_msg = (
-        "Connecting with "
-        f"user={settings['user']}, host={settings['host']}, "
-        f"port={settings['port']}, database={settings['database']}"
+    raise SystemExit(
+        "PostgreSQL loading has been removed from this backend. "
+        "Use --source csv and put your dataset at plant_data/plants.csv or pass --csv-path."
     )
-    logging.info(conn_msg)
-    print(conn_msg)
-
-    url = URL.create(
-        drivername="postgresql+psycopg",
-        username=settings["user"],
-        password=settings["password"],
-        host=settings["host"],
-        port=int(settings["port"]),
-        database=settings["database"],
-    )
-    engine = create_engine(url)
-    query = f"SELECT * FROM {POSTGRES_SCHEMA}.{POSTGRES_TABLE}"
-
-    try:
-        return pd.read_sql(query, engine)
-    except OperationalError as exc:
-        raise SystemExit(
-            "PostgreSQL login failed. Check PGUSER/PGPASSWORD/PGHOST/PGPORT/PGDATABASE "
-            "or enter the correct password when prompted.\n"
-            f"Original error: {exc.orig}"
-        ) from exc
 
 
 def load_dataframe(args: argparse.Namespace) -> tuple[pd.DataFrame, str]:
-    if args.source == "csv":
-        return load_csv_dataframe(args.csv_path), "CSV"
-    return load_postgres_dataframe(), "PostgreSQL"
+    return load_csv_dataframe(args.csv_path), "CSV"
 
 
 def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:

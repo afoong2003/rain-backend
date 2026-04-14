@@ -1,220 +1,275 @@
-import os
-from typing import ClassVar
-from dotenv import load_dotenv
-from sqlalchemy import text, Text, Integer, select, String, Numeric, Boolean, or_
-from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from __future__ import annotations
 
-load_dotenv()
-database_url = os.getenv("DATABASE_URL")
-engine = create_async_engine(database_url, echo=False)
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, ClassVar
 
-class Base(DeclarativeBase):
-    pass
+import pandas as pd
 
-class Plant(Base):
-    __tablename__ = "plants"
-    plant_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    usda_id: Mapped[str] = mapped_column(String(50), nullable=True)
-    scientific_name: Mapped[str] = mapped_column(String(150), nullable=True)
-    display_name: Mapped[str] = mapped_column(String(150), nullable=True)
-    form: Mapped[str] = mapped_column(String(50), nullable=True)
-    price_rating: Mapped[str] = mapped_column(String(50), nullable=True)
-    colors: Mapped[str] = mapped_column(String(150), nullable=True)
-    bloom_start: Mapped[str] = mapped_column(String(50), nullable=True)
-    bloom_end: Mapped[str] = mapped_column(String(50), nullable=True)
-    soil_pref: Mapped[str] = mapped_column(String(150), nullable=True)
-    soil_ph: Mapped[str] = mapped_column(String(100), nullable=True)
-    warnings: Mapped[str] = mapped_column(Text, nullable=True)
-    description: Mapped[str] = mapped_column(Text, nullable=True)
-    image: Mapped[str] = mapped_column(Text, nullable=True)
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_PLANTS_CSV = BASE_DIR / "plant_data" / "plants.csv"
+engine = None
 
-    popularity_rating: Mapped[int] = mapped_column(Integer, nullable=True)
-    height_min: Mapped[float] = mapped_column(Numeric, nullable=True)
-    height_max: Mapped[float] = mapped_column(Numeric, nullable=True)
-    space_min: Mapped[float] = mapped_column(Numeric, nullable=True)
-    space_max: Mapped[float] = mapped_column(Numeric, nullable=True)
 
-    drought_tolerant: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    flood_tolerant: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    road_salt_tolerant: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    sun_full: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    sun_partial: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    sun_shade: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    moisture_wet: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    moisture_med: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    moisture_dry: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    benefits_pollinators: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    benefits_butterflies: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    benefits_hummingbirds: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    benefits_birds: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    deer_resistant: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    pos_base: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    pos_slope: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    pos_margin: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    
-    color_red: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_orange: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_yellow: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_green: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_blue: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_purple: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_pink: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_brown: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    color_white: Mapped[bool] = mapped_column(Boolean, nullable=True)
+def _normalize_bool(value: Any) -> bool | None:
+    if pd.isna(value):
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    return None
 
+
+def _normalize_number(value: Any) -> float | int | None:
+    if pd.isna(value):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(number) if number.is_integer() else number
+
+
+def _normalize_text(value: Any) -> str | None:
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+@dataclass
+class PlantRecord:
+    plant_id: int
+    usda_id: str | None = None
+    scientific_name: str | None = None
+    display_name: str | None = None
+    form: str | None = None
+    price_rating: str | None = None
+    colors: str | None = None
+    bloom_start: float | int | None = None
+    bloom_end: float | int | None = None
+    soil_pref: str | None = None
+    soil_ph: str | None = None
+    warnings: str | None = None
+    description: str | None = None
+    image: str | None = None
+    popularity_rating: int | None = None
+    height_min: float | int | None = None
+    height_max: float | int | None = None
+    space_min: float | int | None = None
+    space_max: float | int | None = None
+    drought_tolerant: bool | None = None
+    flood_tolerant: bool | None = None
+    road_salt_tolerant: bool | None = None
+    sun_full: bool | None = None
+    sun_partial: bool | None = None
+    sun_shade: bool | None = None
+    moisture_wet: bool | None = None
+    moisture_med: bool | None = None
+    moisture_dry: bool | None = None
+    benefits_pollinators: bool | None = None
+    benefits_butterflies: bool | None = None
+    benefits_hummingbirds: bool | None = None
+    benefits_birds: bool | None = None
+    deer_resistant: bool | None = None
+    pos_base: bool | None = None
+    pos_slope: bool | None = None
+    pos_margin: bool | None = None
+    color_red: bool | None = None
+    color_orange: bool | None = None
+    color_yellow: bool | None = None
+    color_green: bool | None = None
+    color_blue: bool | None = None
+    color_purple: bool | None = None
+    color_pink: bool | None = None
+    color_brown: bool | None = None
+    color_white: bool | None = None
+
+
+class Plant:
     tag_map: ClassVar[dict[str, str]] = {
-            "drought_tolerant": "Drought Tolerant",
-            "flood_tolerant": "Flood Tolerant",
-            "road_salt_tolerant": "Road Salt Tolerant",
-            "sun_full": "Sun Full",
-            "sun_partial": "Sun Partial",
-            "sun_shade": "Sun Shade",
-            "moisture_wet": "Moisture Wet",
-            "moisture_med": "Moisture Medium",
-            "moisture_dry": "Moisture Dry",
-            "benefits_pollinators": "Benefit Pollinators",
-            "benefits_hummingbirds": "Benefit Hummingbirds",
-            "benefits_birds": "Benefit Birds",
-            "deer_resistant": "Deer Resistant",
-            "color_red": "Red",
-            "color_orange": "Orange",
-            "color_yellow": "Yellow",
-            "color_green": "Green",
-            "color_blue": "Blue",
-            "color_purple": "Purple",
-            "color_pink": "Pink",
-            "color_brown": "Brown",
-            "color_white": "White",
-            "pos_base": "Base",
-            "pos_slope": "Slope",
-            "pos_margin": "Margin",
+        "drought_tolerant": "Drought Tolerant",
+        "flood_tolerant": "Flood Tolerant",
+        "road_salt_tolerant": "Road Salt Tolerant",
+        "sun_full": "Sun Full",
+        "sun_partial": "Sun Partial",
+        "sun_shade": "Sun Shade",
+        "moisture_wet": "Moisture Wet",
+        "moisture_med": "Moisture Medium",
+        "moisture_dry": "Moisture Dry",
+        "benefits_pollinators": "Benefit Pollinators",
+        "benefits_butterflies": "Benefit Butterflies",
+        "benefits_hummingbirds": "Benefit Hummingbirds",
+        "benefits_birds": "Benefit Birds",
+        "deer_resistant": "Deer Resistant",
+        "color_red": "Red",
+        "color_orange": "Orange",
+        "color_yellow": "Yellow",
+        "color_green": "Green",
+        "color_blue": "Blue",
+        "color_purple": "Purple",
+        "color_pink": "Pink",
+        "color_brown": "Brown",
+        "color_white": "White",
+        "pos_base": "Base",
+        "pos_slope": "Slope",
+        "pos_margin": "Margin",
+    }
+
+    _cache: ClassVar[list[PlantRecord] | None] = None
+    _cache_mtime: ClassVar[float | None] = None
+
+    @classmethod
+    def csv_path(cls) -> Path:
+        return DEFAULT_PLANTS_CSV
+
+    @classmethod
+    def _plant_tags(cls, plant: PlantRecord) -> list[str]:
+        return [
+            tag_name
+            for field_name, tag_name in cls.tag_map.items()
+            if getattr(plant, field_name, None) is True
+        ]
+
+    @classmethod
+    def _build_plant_record(cls, row: dict[str, Any], fallback_id: int) -> PlantRecord:
+        normalized: dict[str, Any] = {}
+        text_fields = {
+            "usda_id",
+            "scientific_name",
+            "display_name",
+            "form",
+            "price_rating",
+            "colors",
+            "soil_pref",
+            "soil_ph",
+            "warnings",
+            "description",
+            "image",
         }
+        number_fields = {
+            "plant_id",
+            "bloom_start",
+            "bloom_end",
+            "popularity_rating",
+            "height_min",
+            "height_max",
+            "space_min",
+            "space_max",
+        }
+        bool_fields = set(cls.tag_map.keys())
+
+        for field_name in PlantRecord.__dataclass_fields__:
+            raw_value = row.get(field_name)
+            if field_name in text_fields:
+                normalized[field_name] = _normalize_text(raw_value)
+            elif field_name in number_fields:
+                normalized[field_name] = _normalize_number(raw_value)
+            elif field_name in bool_fields:
+                normalized[field_name] = _normalize_bool(raw_value)
+            else:
+                normalized[field_name] = raw_value
+
+        plant_id = normalized.get("plant_id")
+        normalized["plant_id"] = int(plant_id) if plant_id is not None else fallback_id
+        popularity = normalized.get("popularity_rating")
+        normalized["popularity_rating"] = int(popularity) if popularity is not None else None
+        return PlantRecord(**normalized)
 
     @classmethod
-    async def get_all_plants(cls, engine) -> list:
-        try:
-            async with AsyncSession(engine) as session:
-                query = select(cls.plant_id, cls.display_name, cls.scientific_name, 
-                               cls.popularity_rating, cls.price_rating, cls.image,
-                               cls.sun_full, cls.sun_shade, cls.sun_partial,
-                               cls.pos_base, cls.pos_margin, cls.pos_slope
-                               )
-                results = await session.execute(query)
-                plant_list = []
+    def load_records(cls) -> list[PlantRecord]:
+        csv_path = cls.csv_path()
+        if not csv_path.exists():
+            raise FileNotFoundError(
+                f"Plant CSV not found. Add your dataset at {csv_path}"
+            )
 
-                for row in results:
-                    plant_tags = []
-                 
-                    for col_name, tag_name in cls.tag_map.items():
-                        if row._mapping.get(col_name) is True:
-                            plant_tags.append(tag_name)
-                    
-                    plant_list.append(
-                        {
-                        "plant_id": row.plant_id,
-                        "display_name": row.display_name,
-                        "scientific_name": row.scientific_name,
-                        "popularity_rating": row.popularity_rating,
-                        "price_rating": row.price_rating,
-                        "image": row.image,
-                        "tags": plant_tags
-                        }
-                    )
-                return plant_list
-            
-        except Exception as e:
-            print(f"err: {e}")
-            return []
-            
-    @classmethod
-    async def get_plant_by_id(cls, engine, target_id: int) -> list:
-        try:
-            async with AsyncSession(engine) as session:
-                search_query = (
-                    select(
-                        cls.display_name, cls.scientific_name, cls.price_rating,
-                        cls.description, cls.moisture_dry, cls.moisture_med,
-                        cls.moisture_wet, cls.bloom_end, cls.bloom_start, 
-                        cls.height_min, cls.height_max, cls.sun_full, cls.sun_partial,
-                        cls.sun_shade, cls.image
-                        )
-                        .where(
-                            cls.plant_id == target_id
-                        )
-                )
-                result = await session.execute(search_query)
-                plant = []
+        modified_time = csv_path.stat().st_mtime
+        if cls._cache is not None and cls._cache_mtime == modified_time:
+            return cls._cache
 
-                for row in result:
-                    plant_tags = []
-                 
-                    for col_name, tag_name in cls.tag_map.items():
-                        if row._mapping.get(col_name) is True:
-                            plant_tags.append(tag_name)
-                        
-                    plant.append(
-                        {
-                            "display_name": row.display_name,
-                            "scientific_name": row.scientific_name,
-                            "price_rating": row.price_rating,
-                            "description": row.description,
-                            "bloom_start": row.bloom_start,
-                            "bloom_end": row.bloom_end,
-                            "height_min": row.height_min,
-                            "height_max": row.height_max,
-                            "image": row.image,
-                            "tags": plant_tags
-                        }
-                    )
-                return plant
-
-        except Exception as e:
-            print(e)
-            return []
+        df = pd.read_csv(csv_path)
+        records = [
+            cls._build_plant_record(row, fallback_id=index + 1)
+            for index, row in enumerate(df.to_dict(orient="records"))
+        ]
+        cls._cache = records
+        cls._cache_mtime = modified_time
+        return records
 
     @classmethod
-    async def search_plant(cls, engine, query: str) -> list:
-        normalized_query = query.strip()
+    async def get_records(cls, _engine=None) -> list[PlantRecord]:
+        return cls.load_records()
+
+    @classmethod
+    async def get_all_plants(cls, _engine=None) -> list:
+        plant_list = []
+        for plant in cls.load_records():
+            plant_list.append(
+                {
+                    "plant_id": plant.plant_id,
+                    "display_name": plant.display_name,
+                    "scientific_name": plant.scientific_name,
+                    "popularity_rating": plant.popularity_rating,
+                    "price_rating": plant.price_rating,
+                    "image": plant.image,
+                    "tags": cls._plant_tags(plant),
+                }
+            )
+        return plant_list
+
+    @classmethod
+    async def get_plant_by_id(cls, _engine, target_id: int) -> list:
+        for plant in cls.load_records():
+            if plant.plant_id == target_id:
+                return [
+                    {
+                        "display_name": plant.display_name,
+                        "scientific_name": plant.scientific_name,
+                        "price_rating": plant.price_rating,
+                        "description": plant.description,
+                        "bloom_start": plant.bloom_start,
+                        "bloom_end": plant.bloom_end,
+                        "height_min": plant.height_min,
+                        "height_max": plant.height_max,
+                        "image": plant.image,
+                        "tags": cls._plant_tags(plant),
+                    }
+                ]
+        return []
+
+    @classmethod
+    async def search_plant(cls, _engine, query: str) -> list:
+        normalized_query = query.strip().lower()
         if not normalized_query:
             return []
 
-        try:
-            async with AsyncSession(engine) as session:
-                starts_with = f"{normalized_query}%"
-                search_query = (
-                    select(
-                        cls.plant_id, cls.display_name, 
-                        cls.scientific_name, cls.image, 
-                    )
-                    .where(
-                        or_(
-                            cls.scientific_name.ilike(starts_with),
-                            cls.display_name.ilike(starts_with),
-                        )
-                    )
+        matches = []
+        for plant in cls.load_records():
+            scientific_name = (plant.scientific_name or "").lower()
+            display_name = (plant.display_name or "").lower()
+            if scientific_name.startswith(normalized_query) or display_name.startswith(normalized_query):
+                matches.append(
+                    {
+                        "plant_id": plant.plant_id,
+                        "display_name": plant.display_name,
+                        "scientific_name": plant.scientific_name,
+                        "image": plant.image,
+                    }
                 )
-                results = await session.execute(search_query)
-                plant_list = []
-
-                for row in results:
-                    plant_list.append(
-                        {
-                            "plant_id": row.plant_id,
-                            "display_name": row.display_name,
-                            "scientific_name": row.scientific_name,
-                            "image": row.image,
-                        }
-                    )
-                return plant_list
-
-        except Exception as e:
-            print(f"err: {e}")
-            return []
+        return matches
 
     @classmethod
     async def plant_filter(
-        cls, engine, 
+        cls,
+        _engine,
         sun_shade: bool | None = None,
         sun_full: bool | None = None,
         sun_partial: bool | None = None,
@@ -223,63 +278,33 @@ class Plant(Base):
         moisture_med: bool | None = None,
         pos_base: bool | None = None,
         pos_slope: bool | None = None,
-        pos_margin: bool | None = None
-        ) -> list:
-        try:
-            async with AsyncSession(engine) as session:
-                filters = []
+        pos_margin: bool | None = None,
+    ) -> list:
+        active_filters = {
+            "sun_full": sun_full,
+            "sun_shade": sun_shade,
+            "sun_partial": sun_partial,
+            "moisture_wet": moisture_wet,
+            "moisture_dry": moisture_dry,
+            "moisture_med": moisture_med,
+            "pos_base": pos_base,
+            "pos_slope": pos_slope,
+            "pos_margin": pos_margin,
+        }
 
-                check = {
-                    "sun_full": sun_full,
-                    "sun_shade": sun_shade,
-                    "sun_partial": sun_partial,
-                    "moisture_wet": moisture_wet,
-                    "moisture_dry": moisture_dry,
-                    "moisture_med": moisture_med,
-                    "pos_base": pos_base, 
-                    "pos_slope": pos_slope,
-                    "pos_margin": pos_margin
+        filtered = []
+        for plant in cls.load_records():
+            if any(
+                value is True and getattr(plant, field_name) is not True
+                for field_name, value in active_filters.items()
+            ):
+                continue
+            filtered.append(
+                {
+                    "plant_id": plant.plant_id,
+                    "display_name": plant.display_name,
+                    "scientific_name": plant.scientific_name,
+                    "image": plant.image,
                 }
-
-                for name, value in check.items():
-                    if value is True:
-                        filters.append(getattr(cls, name).is_(True))
-
-                search_query = select(
-                        cls.plant_id, cls.display_name, cls.scientific_name, 
-                        cls.image, cls.pos_base, cls.pos_margin,
-                        cls.pos_slope, cls.sun_full, cls.sun_partial,
-                        cls.sun_shade
-                    )
-                
-                if filters: 
-                    search_query = search_query.where(*filters)
-                   
-                results = await session.execute(search_query)
-                plant_list = []
-
-                for row in results:
-                    """"
-                    plant_tags = []
-                 
-                    for col_name, tag_name in cls.tag_map.items():
-                        if row._mapping.get(col_name) is True:
-                            plant_tags.append(tag_name)
-                            """
-
-                    plant_list.append(
-                        {
-                            "plant_id": row.plant_id,
-                            "display_name": row.display_name,
-                            "scientific_name": row.scientific_name,
-                            "image": row.image,    
-                            #"tags": plant_tags                   
-                        }
-                    )
-                return plant_list
-
-        
-        except Exception as e:
-            print(f"error: {e}")
-            return []
-
+            )
+        return filtered
